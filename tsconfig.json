@@ -1,0 +1,69 @@
+# PaceMap — pacemap.co.uk
+
+Horse racing pace maps for every UK & Irish meeting.
+
+## Tech Stack
+- **Next.js 14** (App Router)
+- **Clerk** (authentication)
+- **Stripe** (payments — day pass + monthly subscription)
+- **Vercel** (hosting + serverless functions)
+
+---
+
+## Environment Variables
+
+Add all of these in Vercel → Settings → Environment Variables:
+
+| Name | Where to find it |
+|------|-----------------|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk dashboard → API Keys |
+| `CLERK_SECRET_KEY` | Clerk dashboard → API Keys |
+| `STRIPE_SECRET_KEY` | Stripe → Developers → API Keys |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe → Developers → API Keys |
+| `NEXT_PUBLIC_URL` | Set to: `https://pacemap.co.uk` |
+
+---
+
+## Stripe Product IDs
+
+- **Day Pass (£2.99):** `price_1TEzCaEduSNHToGxTZGIPjAj`
+- **Monthly (£9.99):** `price_1TEzDGEduSNHToGx9qNj7Aad`
+
+If you ever recreate these products, update `lib/stripe.ts`.
+
+---
+
+## Adding a New Meeting
+
+1. Create a new folder: `app/meetings/COURSE-DD-MONTH-YYYY/`
+2. Copy `app/meetings/cheltenham-13-march-2026/page.tsx` into it
+3. Update the `RACES` array at the top with the new meeting's data
+4. Add the meeting to `app/archive/page.tsx` (MEETINGS array at top)
+5. Commit and push to GitHub — Vercel deploys automatically in ~60 seconds
+
+### Free vs Paid rule
+- First race in every meeting: set `free: true`
+- All other races: set `free: false`
+- Users with an active subscription or valid day pass see everything
+
+---
+
+## Clerk Setup
+
+In your Clerk dashboard, make sure:
+- Allowed redirect URLs include `https://pacemap.co.uk`
+- Sign-in URL: `/sign-in`
+- Sign-up URL: `/sign-up`
+- After sign-in redirect: `/`
+- After sign-up redirect: `/`
+
+---
+
+## Local Development
+
+```bash
+npm install
+# Create .env.local with all environment variables above
+npm run dev
+# Site at http://localhost:3000
+```
