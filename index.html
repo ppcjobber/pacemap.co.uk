@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="PaceMap — Horse racing pace maps. Understand how each race is likely to unfold before it happens.">
+<title>PaceMap — Race Shape Analysis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --green:       #0a3d1f;
+  --green-mid:   #1a5c32;
+  --green-light: #2d8c52;
+  --gold:        #c9a84c;
+  --gold-light:  #e8cc7a;
+  --cream:       #f5f0e8;
+  --white:       #ffffff;
+  --lead:        #c0392b;
+  --prominent:   #e67e22;
+  --midfield:    #2980b9;
+  --holdup:      #8e44ad;
+  --strong:      #27ae60;
+  --even:        #7f8c8d;
+  --fade:        #e74c3c;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--green);
+  font-family: 'DM Sans', sans-serif;
+  color: var(--cream);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── TURF TEXTURE ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(90deg, transparent, transparent 40px, rgba(255,255,255,0.012) 40px, rgba(255,255,255,0.012) 41px),
+    repeating-linear-gradient(0deg,  transparent, transparent 40px, rgba(255,255,255,0.012) 40px, rgba(255,255,255,0.012) 41px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── NAV ── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  height: 64px;
+  background: rgba(10,61,31,0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(201,168,76,0.2);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  text-decoration: none;
+}
+
+.nav-brand-main {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+.nav-brand-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green-light);
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+
+.nav-links a {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.5);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.nav-links a:hover { color: var(--gold); }
+
+.nav-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  color: var(--green);
+  background: var(--gold);
+  padding: 3px 8px;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+/* ── HERO ── */
+.hero {
+  position: relative;
+  z-index: 1;
+  padding: 140px 40px 80px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.hero-eyebrow {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero-eyebrow::before {
+  content: '';
+  display: block;
+  width: 32px;
+  height: 1px;
+  background: var(--gold);
+}
+
+.hero-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: clamp(3.5rem, 8vw, 7rem);
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  color: var(--cream);
+  margin-bottom: 8px;
+}
+
+.hero-title span {
+  color: var(--gold);
+}
+
+.hero-subtitle {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  color: rgba(245,240,232,0.55);
+  margin-bottom: 40px;
+  max-width: 560px;
+  line-height: 1.5;
+}
+
+.hero-desc {
+  font-size: 0.9rem;
+  color: rgba(245,240,232,0.65);
+  max-width: 480px;
+  line-height: 1.8;
+  margin-bottom: 48px;
+}
+
+.hero-cta {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--gold);
+  color: var(--green);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 14px 28px;
+  border-radius: 3px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background: var(--gold-light);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.5);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s;
+}
+
+.btn-secondary:hover { color: var(--cream); }
+
+/* ── WHAT IS THIS ── */
+.explainer {
+  position: relative;
+  z-index: 1;
+  background: rgba(255,255,255,0.03);
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  padding: 64px 40px;
+  margin-bottom: 0;
+}
+
+.explainer-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 48px;
+}
+
+.explainer-item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.explainer-number {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 3rem;
+  color: rgba(201,168,76,0.2);
+  line-height: 1;
+}
+
+.explainer-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.1rem;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+
+.explainer-text {
+  font-size: 0.82rem;
+  color: rgba(245,240,232,0.6);
+  line-height: 1.8;
+}
+
+/* ── SECTION HEADER ── */
+.section-wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 64px 40px;
+}
+
+.section-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(201,168,76,0.25);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.section-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 6px;
+}
+
+.section-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  color: var(--cream);
+}
+
+.section-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  color: rgba(245,240,232,0.4);
+  letter-spacing: 0.06em;
+  text-align: right;
+  line-height: 1.8;
+}
+
+/* ── HOLDING BADGE ── */
+.holding-banner {
+  background: rgba(201,168,76,0.1);
+  border: 1px solid rgba(201,168,76,0.3);
+  border-radius: 6px;
+  padding: 16px 24px;
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.holding-icon {
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
+.holding-text {
+  font-size: 0.82rem;
+  color: rgba(245,240,232,0.75);
+  line-height: 1.6;
+}
+
+.holding-text strong {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+/* ── PACE MAP EMBED ── */
+.pace-map-frame {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pace-map-frame-header {
+  padding: 16px 24px;
+  background: rgba(201,168,76,0.08);
+  border-bottom: 1px solid rgba(201,168,76,0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pace-map-frame-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+  color: var(--gold);
+}
+
+.pace-map-frame-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(245,240,232,0.4);
+  background: rgba(255,255,255,0.05);
+  padding: 4px 10px;
+  border-radius: 2px;
+}
+
+/* ── INLINE PACE MAP (from the triumph hurdle) ── */
+.pm-wrap {
+  padding: 32px;
+}
+
+.pm-header {
+  border-bottom: 2px solid var(--gold);
+  padding-bottom: 20px;
+  margin-bottom: 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pm-race-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.pm-race-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.68rem;
+  color: rgba(245,240,232,0.5);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  text-align: right;
+}
+
+.pm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-bottom: 24px;
+  padding: 12px 18px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  border: 1px solid rgba(201,168,76,0.15);
+}
+
+.pm-legend-group { display: flex; align-items: center; gap: 8px; }
+.pm-legend-label { font-family: 'DM Mono', monospace; font-size: 0.64rem; color: rgba(245,240,232,0.5); letter-spacing: 0.06em; text-transform: uppercase; }
+.pm-legend-items { display: flex; gap: 12px; }
+.pm-legend-item { display: flex; align-items: center; gap: 5px; font-size: 0.7rem; color: rgba(245,240,232,0.75); }
+.pm-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+.pm-section-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  color: var(--gold-light);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pm-section-title::after { content: ''; flex: 1; height: 1px; background: rgba(201,168,76,0.25); }
+
+.pm-pace-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.pm-pace-card {
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid;
+  text-align: center;
+}
+
+.pm-pace-card-lead     { border-color: rgba(192,57,43,0.4);  background: rgba(192,57,43,0.08); }
+.pm-pace-card-prom     { border-color: rgba(230,126,34,0.4); background: rgba(230,126,34,0.07); }
+.pm-pace-card-mid      { border-color: rgba(41,128,185,0.4); background: rgba(41,128,185,0.07); }
+.pm-pace-card-holdup   { border-color: rgba(142,68,173,0.4); background: rgba(142,68,173,0.07); }
+
+.pm-pace-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 0.9rem; letter-spacing: 0.1em; margin-bottom: 6px; }
+.pm-pace-card-lead .pm-pace-card-title   { color: var(--lead); }
+.pm-pace-card-prom .pm-pace-card-title   { color: var(--prominent); }
+.pm-pace-card-mid .pm-pace-card-title    { color: var(--midfield); }
+.pm-pace-card-holdup .pm-pace-card-title { color: var(--holdup); }
+
+.pm-pace-card-count { font-family: 'Bebas Neue', sans-serif; font-size: 2rem; line-height: 1; margin-bottom: 5px; }
+.pm-pace-card-names { font-size: 0.58rem; color: rgba(245,240,232,0.5); line-height: 1.6; font-family: 'DM Mono', monospace; }
+
+/* Table */
+.pm-table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 24px; }
+
+.pm-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.pm-table thead tr { background: rgba(201,168,76,0.12); border-bottom: 2px solid var(--gold); }
+.pm-table th { font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); padding: 10px 12px; text-align: left; white-space: nowrap; }
+.pm-table td { padding: 7px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle; }
+.pm-table tr:hover td { background: rgba(255,255,255,0.03); }
+.row-tier1 td { background: rgba(201,168,76,0.05); }
+.row-pace  td { background: rgba(142,68,173,0.05); }
+
+.no-cell { font-family: 'DM Mono', monospace; font-size: 0.68rem; color: var(--gold); font-weight: 500; }
+.horse-name { font-weight: 600; color: var(--cream); }
+.horse-name-sub { font-size: 0.62rem; color: rgba(245,240,232,0.45); font-weight: 400; }
+
+.pos-badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-family: 'DM Mono', monospace; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em; }
+.pos-L { background: rgba(192,57,43,0.2);  color: #e74c3c; border: 1px solid rgba(192,57,43,0.4); }
+.pos-P { background: rgba(230,126,34,0.2); color: #f39c12; border: 1px solid rgba(230,126,34,0.4); }
+.pos-M { background: rgba(41,128,185,0.2); color: #5dade2; border: 1px solid rgba(41,128,185,0.4); }
+.pos-H { background: rgba(142,68,173,0.2); color: #a569bd; border: 1px solid rgba(142,68,173,0.4); }
+
+.fin-S { color: var(--strong); font-weight: 600; }
+.fin-E { color: #95a5a6; }
+.fin-F { color: #e74c3c; }
+
+.tier-badge { display: inline-block; padding: 2px 5px; border-radius: 3px; font-size: 0.56rem; font-family: 'DM Mono', monospace; font-weight: 700; letter-spacing: 0.04em; }
+.tier-1    { background: rgba(201,168,76,0.2); color: var(--gold); border: 1px solid rgba(201,168,76,0.5); }
+.tier-2    { background: rgba(100,180,255,0.12); color: #7ec8e3; border: 1px solid rgba(100,180,255,0.3); }
+.tier-pace { background: rgba(142,68,173,0.15); color: #c39bd3; border: 1px solid rgba(142,68,173,0.4); }
+
+.rpr-high { color: #2ecc71; font-weight: 600; font-family: 'DM Mono', monospace; font-size: 0.74rem; }
+.rpr-mid  { color: #f39c12; font-family: 'DM Mono', monospace; font-size: 0.74rem; }
+.rpr-low  { color: rgba(245,240,232,0.35); font-family: 'DM Mono', monospace; font-size: 0.74rem; }
+
+.ground-note { display: inline-block; margin-left: 3px; padding: 1px 4px; border-radius: 2px; font-size: 0.58rem; font-family: 'DM Mono', monospace; }
+.ground-ok      { background: rgba(39,174,96,0.2);  color: #2ecc71; }
+.ground-warn    { background: rgba(231,76,60,0.2);  color: #e74c3c; }
+.ground-neutral { background: rgba(127,140,141,0.2); color: #95a5a6; }
+
+/* Analysis box */
+.pm-analysis {
+  background: rgba(201,168,76,0.07);
+  border: 1px solid rgba(201,168,76,0.25);
+  border-radius: 8px;
+  padding: 20px 24px;
+}
+.pm-analysis h3 { font-family: 'Bebas Neue', sans-serif; font-size: 0.95rem; letter-spacing: 0.12em; color: var(--gold); margin-bottom: 12px; }
+.pm-analysis p { font-size: 0.78rem; line-height: 1.75; color: rgba(245,240,232,0.75); margin-bottom: 8px; }
+.pm-analysis p:last-child { margin-bottom: 0; }
+.hl { color: var(--gold-light); font-weight: 600; }
+
+/* ── COMING SOON STRIP ── */
+.coming-soon {
+  position: relative;
+  z-index: 1;
+  background: rgba(201,168,76,0.05);
+  border-top: 1px solid rgba(201,168,76,0.15);
+  padding: 64px 40px;
+}
+
+.coming-soon-inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.cs-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem;
+  letter-spacing: 0.06em;
+  color: var(--cream);
+  margin-bottom: 32px;
+}
+
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.cs-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px;
+  padding: 24px;
+  opacity: 0.6;
+}
+
+.cs-card-icon { font-size: 1.4rem; margin-bottom: 12px; }
+.cs-card-title { font-family: 'Bebas Neue', sans-serif; font-size: 1rem; letter-spacing: 0.1em; color: var(--gold); margin-bottom: 8px; }
+.cs-card-text { font-size: 0.75rem; color: rgba(245,240,232,0.5); line-height: 1.7; }
+.cs-card-tag { display: inline-block; margin-top: 12px; font-family: 'DM Mono', monospace; font-size: 0.58rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); background: var(--gold); padding: 2px 8px; border-radius: 2px; opacity: 0.7; }
+
+/* ── FOOTER ── */
+footer {
+  position: relative;
+  z-index: 1;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding: 32px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.footer-brand {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.2rem;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+.footer-text {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+  color: rgba(245,240,232,0.25);
+  letter-spacing: 0.06em;
+  text-align: right;
+  line-height: 1.8;
+}
+
+/* ── ANIMATIONS ── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hero-eyebrow { animation: fadeUp 0.6s ease both; }
+.hero-title   { animation: fadeUp 0.6s ease 0.1s both; }
+.hero-subtitle{ animation: fadeUp 0.6s ease 0.2s both; }
+.hero-desc    { animation: fadeUp 0.6s ease 0.3s both; }
+.hero-cta     { animation: fadeUp 0.6s ease 0.4s both; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 800px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .hero { padding: 120px 20px 60px; }
+  .explainer-inner { grid-template-columns: 1fr; gap: 32px; }
+  .explainer { padding: 48px 20px; }
+  .section-wrap { padding: 48px 20px; }
+  .pm-wrap { padding: 20px; }
+  .pm-pace-summary { grid-template-columns: repeat(2, 1fr); }
+  .pm-header { flex-direction: column; align-items: flex-start; }
+  .pm-race-meta { text-align: left; }
+  .cs-grid { grid-template-columns: 1fr; }
+  .coming-soon { padding: 48px 20px; }
+  footer { padding: 24px 20px; flex-direction: column; align-items: flex-start; }
+  .footer-text { text-align: left; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-brand">
+    <span class="nav-brand-main">PaceMap</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#today">Today's Maps</a></li>
+    <li><a href="#about">About</a></li>
+    <li><span class="nav-badge">Free</span></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-eyebrow">Horse Racing · Race Shape Analysis</div>
+  <h1 class="hero-title">Read the<br><span>race before</span><br>it runs.</h1>
+  <p class="hero-subtitle">Pace maps for every UK & Irish meeting, every day.</p>
+  <p class="hero-desc">
+    PaceMap analyses each runner's historical running style to build a picture of how a race is likely to unfold — before the off. Who leads, who's covered up, where the traffic will be, and which horses the pace scenario favours.
+  </p>
+  <div class="hero-cta">
+    <a href="#today" class="btn-primary">↓ See Today's Map</a>
+    <a href="#about" class="btn-secondary">How it works →</a>
+  </div>
+</section>
+
+<!-- EXPLAINER -->
+<section class="explainer" id="about">
+  <div class="explainer-inner">
+    <div class="explainer-item">
+      <div class="explainer-number">01</div>
+      <div class="explainer-title">Running Style Analysis</div>
+      <p class="explainer-text">Each runner's last 15 races are analysed to classify their typical position — front-runner, prominent, midfield or hold-up. Style is derived from in-running comments, not assumed.</p>
+    </div>
+    <div class="explainer-item">
+      <div class="explainer-number">02</div>
+      <div class="explainer-title">Race Shape Modelling</div>
+      <p class="explainer-text">With the full field mapped, we model the likely pace scenario — contested, slowly-run or collapse — and identify which running styles that scenario favours. Going and course bias are factored in.</p>
+    </div>
+    <div class="explainer-item">
+      <div class="explainer-number">03</div>
+      <div class="explainer-title">No Tips. Just Context.</div>
+      <p class="explainer-text">PaceMap doesn't tell you who to back. It gives you the context to make better decisions yourself — where the traffic will be, which horses get a soft lead, which face an uphill task.</p>
+    </div>
+  </div>
+</section>
+
+<!-- TODAY'S MAP -->
+<section id="today">
+  <div class="section-wrap">
+
+    <div class="section-header">
+      <div>
+        <div class="section-label">Example Race</div>
+        <div class="section-title">Cheltenham Festival · 13 March 2026</div>
+      </div>
+      <div class="section-meta">
+        Going: Good to Soft<br>
+        1 race shown · Full meetings daily from launch
+      </div>
+    </div>
+
+    <div class="holding-banner">
+      <div class="holding-icon">⚓</div>
+      <div class="holding-text">
+        <strong>Coming soon —</strong> full daily meetings with pace maps for every race, automatically generated each morning. The map below shows how PaceMap works using the 2026 Cheltenham Triumph Hurdle as an example.
+      </div>
+    </div>
+
+    <!-- PACE MAP -->
+    <div class="pace-map-frame">
+      <div class="pace-map-frame-header">
+        <div class="pace-map-frame-title">JCB Triumph Hurdle — Cheltenham 2026</div>
+        <div class="pace-map-frame-badge">Example Map</div>
+      </div>
+
+      <div class="pm-wrap">
+
+        <div class="pm-header">
+          <div>
+            <div class="pm-race-title">JCB Triumph Hurdle</div>
+            <div style="font-family:'DM Mono',monospace;font-size:0.68rem;color:var(--gold-light);letter-spacing:0.06em;margin-top:4px;">PACE MAP · CHELTENHAM · FRIDAY 13 MARCH 2026</div>
+          </div>
+          <div class="pm-race-meta">
+            2m179y (New Course) · Good to Soft<br>
+            Grade 1 · 20 Runners · 4yo
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="pm-legend">
+          <div class="pm-legend-group">
+            <span class="pm-legend-label">Position:</span>
+            <div class="pm-legend-items">
+              <div class="pm-legend-item"><span class="pm-legend-dot" style="background:var(--lead)"></span> L = Lead</div>
+              <div class="pm-legend-item"><span class="pm-legend-dot" style="background:var(--prominent)"></span> P = Prominent</div>
+              <div class="pm-legend-item"><span class="pm-legend-dot" style="background:var(--midfield)"></span> M = Midfield</div>
+              <div class="pm-legend-item"><span class="pm-legend-dot" style="background:var(--holdup)"></span> H = Hold Up</div>
+            </div>
+          </div>
+          <div class="pm-legend-group">
+            <span class="pm-legend-label">Finish:</span>
+            <div class="pm-legend-items">
+              <div class="pm-legend-item" style="color:var(--strong)">S = Strong</div>
+              <div class="pm-legend-item" style="color:#95a5a6">E = Even</div>
+              <div class="pm-legend-item" style="color:#e74c3c">F = Fades</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pace Cards -->
+        <div class="pm-section-title">Early Pace Distribution</div>
+        <div class="pm-pace-summary">
+          <div class="pm-pace-card pm-pace-card-lead">
+            <div class="pm-pace-card-title">Lead</div>
+            <div class="pm-pace-card-count" style="color:var(--lead)">3</div>
+            <div class="pm-pace-card-names">Kai Lung<br>Minella Academy<br>One Horse Town</div>
+          </div>
+          <div class="pm-pace-card pm-pace-card-prom">
+            <div class="pm-pace-card-title">Prominent</div>
+            <div class="pm-pace-card-count" style="color:var(--prominent)">8</div>
+            <div class="pm-pace-card-names">Fantasy World · Macho Man<br>Maestro Conti · Mon Creuset<br>Proactif · Selma De Vary<br>Highland Crystal · Minella Study</div>
+          </div>
+          <div class="pm-pace-card pm-pace-card-mid">
+            <div class="pm-pace-card-title">Midfield</div>
+            <div class="pm-pace-card-count" style="color:var(--midfield)">4</div>
+            <div class="pm-pace-card-names">Indian River · Lord Byron<br>Maestro Conti · Tenter Le Tout</div>
+          </div>
+          <div class="pm-pace-card pm-pace-card-holdup">
+            <div class="pm-pace-card-title">Hold Up</div>
+            <div class="pm-pace-card-count" style="color:var(--holdup)">5</div>
+            <div class="pm-pace-card-names">Apolon De Charnie · Berto Ramirez<br>Forty Fifty · North Shore<br>Wolf Rayet</div>
+          </div>
+        </div>
+
+        <!-- Table -->
+        <div class="pm-section-title">Full Field Breakdown</div>
+        <div class="pm-table-wrap">
+          <table class="pm-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Horse</th>
+                <th>Trainer</th>
+                <th>Position</th>
+                <th>Finish</th>
+                <th>Ground</th>
+                <th>RPR</th>
+                <th>Tier</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="row-pace">
+                <td class="no-cell">6</td>
+                <td><div class="horse-name">Kai Lung</div><div class="horse-name-sub">Sean O'Keeffe</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-L">LEAD</span></td>
+                <td class="fin-E">Even</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-mid">118</td>
+                <td><span class="tier-badge tier-pace">Pace</span></td>
+              </tr>
+              <tr>
+                <td class="no-cell">10</td>
+                <td><div class="horse-name">Minella Academy</div><div class="horse-name-sub">Danny Mullins</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-L">LEAD</span></td>
+                <td class="fin-E">Even</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-low">109</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td class="no-cell">14</td>
+                <td><div class="horse-name">One Horse Town</div><div class="horse-name-sub">Paul O'Brien</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">Harry Derham</td>
+                <td><span class="pos-badge pos-L">LEAD</span></td>
+                <td class="fin-E">Even</td>
+                <td>Good <span class="ground-note ground-neutral">~</span></td>
+                <td class="rpr-mid">122</td>
+                <td>—</td>
+              </tr>
+              <tr class="row-tier1">
+                <td class="no-cell">17</td>
+                <td><div class="horse-name">Highland Crystal ⭐</div><div class="horse-name-sub">Jack Kennedy</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">Gordon Elliott</td>
+                <td><span class="pos-badge pos-P">PROM</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-high">129</td>
+                <td><span class="tier-badge tier-1">T1</span></td>
+              </tr>
+              <tr class="row-tier1">
+                <td class="no-cell">11</td>
+                <td><div class="horse-name">Minella Study ⭐</div><div class="horse-name-sub">Ryan Mania</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">Adam Nicol</td>
+                <td><span class="pos-badge pos-P">PROM</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>GtoS <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-high">131</td>
+                <td><span class="tier-badge tier-1">T1</span></td>
+              </tr>
+              <tr>
+                <td class="no-cell">15</td>
+                <td><div class="horse-name">Proactif</div><div class="horse-name-sub">Mark Walsh</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-P">PROM</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-mid">127</td>
+                <td><span class="tier-badge tier-2">T2</span></td>
+              </tr>
+              <tr>
+                <td class="no-cell">19</td>
+                <td><div class="horse-name">Selma De Vary</div><div class="horse-name-sub">Paul Townend</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-P">PROM</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>Heavy <span class="ground-note ground-warn">⚠</span></td>
+                <td class="rpr-high">129</td>
+                <td><span class="tier-badge tier-2">T2</span></td>
+              </tr>
+              <tr>
+                <td class="no-cell">8</td>
+                <td><div class="horse-name">Macho Man</div><div class="horse-name-sub">Brian Hayes</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-P">PROM</span></td>
+                <td class="fin-E">Even</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-mid">122</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td class="no-cell">9</td>
+                <td><div class="horse-name">Maestro Conti ⭐</div><div class="horse-name-sub">Harry Skelton</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">Dan Skelton</td>
+                <td><span class="pos-badge pos-M">MID</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>GtoS <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-mid">123</td>
+                <td><span class="tier-badge tier-1">T1</span></td>
+              </tr>
+              <tr>
+                <td class="no-cell">5</td>
+                <td><div class="horse-name">Indian River</div><div class="horse-name-sub">Kielan Woods</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">A P Keatley</td>
+                <td><span class="pos-badge pos-M">MID</span></td>
+                <td class="fin-E">Even</td>
+                <td>GtoS <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-low">113</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td class="no-cell">1</td>
+                <td><div class="horse-name">Apolon De Charnie</div><div class="horse-name-sub">Mr P W Mullins</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-H">HOLD</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-low">93</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td class="no-cell">4</td>
+                <td><div class="horse-name">Forty Fifty</div><div class="horse-name-sub">Jonathan Burke</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">W P Mullins</td>
+                <td><span class="pos-badge pos-H">HOLD</span></td>
+                <td class="fin-S">Strong ↑</td>
+                <td>Unknown <span class="ground-note ground-neutral">?</span></td>
+                <td class="rpr-low">102</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td class="no-cell">13</td>
+                <td><div class="horse-name">North Shore</div><div class="horse-name-sub">Keith Donoghue</div></td>
+                <td style="font-size:0.7rem;color:rgba(245,240,232,0.6)">G Cromwell</td>
+                <td><span class="pos-badge pos-H">HOLD</span></td>
+                <td class="fin-F">Fades ↓</td>
+                <td>Soft <span class="ground-note ground-ok">✓</span></td>
+                <td class="rpr-mid">128</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Analysis -->
+        <div class="pm-analysis">
+          <h3>⚡ Pace Scenario — What This Map Tells Us</h3>
+          <p><span class="hl">Contested early pace:</span> Three horses are rated as leaders — Kai Lung, Minella Academy and One Horse Town. This means the race should have genuine, honest early fractions — not a crawl. The pace is real.</p>
+          <p><span class="hl">Prominent group is congested (8 horses):</span> In a field of 20 with strong early pace, there will be traffic and jostling for position from 3–4 out. Horses that handle the hurly-burly and can find a gap late are at a premium.</p>
+          <p><span class="hl">Strong finishing profile aligns with key contenders:</span> The Tier 1 horses — Highland Crystal, Minella Study and Maestro Conti — are all rated as strong finishers. In a genuinely-run race with a stiff Cheltenham finish, this is the optimal profile.</p>
+          <p><span class="hl">Hold-up horses face a tough task:</span> With 3 confirmed leaders and a large prominent group, getting a clear run late at Cheltenham from off the pace over this trip is difficult. The winner Apolon De Charnie (50/1) defied this — a reminder that pace maps inform, not predict.</p>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- COMING SOON -->
+<section class="coming-soon">
+  <div class="coming-soon-inner">
+    <div class="cs-title">Coming Soon — Full Daily Coverage</div>
+    <div class="cs-grid">
+      <div class="cs-card">
+        <div class="cs-card-icon">🏇</div>
+        <div class="cs-card-title">Every UK & Irish Meeting</div>
+        <p class="cs-card-text">Pace maps for every race at every meeting — Cheltenham, Ascot, Leopardstown, Punchestown and beyond. Updated each morning before racing.</p>
+        <span class="cs-card-tag">Daily</span>
+      </div>
+      <div class="cs-card">
+        <div class="cs-card-icon">⚡</div>
+        <div class="cs-card-title">Race Shape Scenarios</div>
+        <p class="cs-card-text">Contested, slowly-run, or collapse likely? Each map includes a pace scenario with probability and a written analysis of which runners it favours.</p>
+        <span class="cs-card-tag">Per Race</span>
+      </div>
+      <div class="cs-card">
+        <div class="cs-card-icon">📊</div>
+        <div class="cs-card-title">Course & Going Bias</div>
+        <p class="cs-card-text">Running style alone isn't enough. Course configuration and going conditions are factored into every map — front-runners at Ascot straight are different from Chester.</p>
+        <span class="cs-card-tag">Contextual</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-brand">PaceMap</div>
+  <div class="footer-text">
+    pacemap.co.uk · For informational purposes only<br>
+    Not a tipster service · No financial advice given
+  </div>
+</footer>
+
+</body>
+</html>
